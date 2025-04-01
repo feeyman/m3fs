@@ -19,6 +19,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -40,7 +41,93 @@ var (
 	clusterDeleteAll bool
 )
 
+// CheckGlobalFlagsPlacement checks if global flags are placed after subcommands
+// and provides correction suggestions if needed
+func checkGlobalFlagsPlacement(args []string) {
+	if len(args) <= 2 {
+		return
+	}
+	
+	globalFlags := map[string]bool{
+		"--debug": true, "--help": true, "-h": true,
+		"--version": true, "-v": true,
+	}
+	
+	subcommands := map[string]bool{
+		"artifact": true, "a": true, "cluster": true, "c": true,
+		"config": true, "cfg": true, "os": true, "tmpl": true,
+	}
+	
+	commandIndex := -1
+	for i := 1; i < len(args); i++ {
+		if subcommands[args[i]] {
+			commandIndex = i
+			break
+		}
+	}
+	
+	if commandIndex == -1 {
+		return
+	}
+	
+	var invalidFlags []string
+	var validArgs []string
+	validArgs = append(validArgs, args[0])
+	
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+		
+		if i == commandIndex+1 && isSubSubcommand(arg) {
+			validArgs = append(validArgs, arg)
+			continue
+		}
+		
+		if i > commandIndex && isGlobalFlag(arg, globalFlags) {
+			invalidFlags = append(invalidFlags, arg)
+		} else {
+			validArgs = append(validArgs, arg)
+		}
+	}
+	
+	if len(invalidFlags) > 0 {
+		suggestion := []string{args[0]}
+		suggestion = append(suggestion, invalidFlags...)
+		suggestion = append(suggestion, validArgs[1:]...)
+		
+		fmt.Println("Error: Global flags must be placed before subcommands")
+		fmt.Println("Correct usage: m3fs [global options] command [command options] [arguments...]")
+		fmt.Println("Suggested command:", strings.Join(suggestion, " "))
+		os.Exit(1)
+	}
+}
+
+// isGlobalFlag checks if an argument is a global flag
+func isGlobalFlag(arg string, flagMap map[string]bool) bool {
+	if flagMap[arg] {
+		return true
+	}
+	
+	if strings.HasPrefix(arg, "--") {
+		parts := strings.SplitN(arg, "=", 2)
+		return flagMap[parts[0]]
+	}
+	
+	return false
+}
+
+// isSubSubcommand checks if a string is a secondary command
+func isSubSubcommand(cmd string) bool {
+	subSubcmds := map[string]bool{
+		"create": true, "delete": true, "destroy": true,
+		"prepare": true, "export": true, "download": true,
+		"d": true, "e": true, "init": true,
+	}
+	return subSubcmds[cmd]
+}
+
 func main() {
+	checkGlobalFlagsPlacement(os.Args)
+	
 	app := &cli.App{
 		Name:  "m3fs",
 		Usage: "3FS Deploy Tool",
@@ -81,7 +168,7 @@ Build At: %s
 Go Version: %s
 Go OS/Arch: %s/%s`,
 			common.Version,
-			common.GitSha[:7],
+			getGitShaPrefix(),
 			common.BuildTime,
 			runtime.Version(),
 			runtime.GOOS,
@@ -92,3 +179,14 @@ Go OS/Arch: %s/%s`,
 		log.Fatal(err)
 	}
 }
+
+// getGitShaPrefix safely retrieves the GitSha prefix, avoiding crashes due to empty strings
+func getGitShaPrefix() string {
+	if len(common.GitSha) >= 7 {
+		return common.GitSha[:7]
+	} else if len(common.GitSha) > 0 {
+		return common.GitSha
+	}
+	return "unknown"
+}
+
