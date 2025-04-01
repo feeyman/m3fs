@@ -103,7 +103,21 @@ func (t *BaseTask) newStepExecuter(newStepFunc func() Step, retryTime int) func(
 
 // ExecuteSteps executes all the steps of the task.
 func (t *BaseTask) ExecuteSteps(ctx context.Context) error {
-	for _, stepCfg := range t.steps {
+	taskID := t.Name()
+
+	totalSteps := len(t.steps)
+
+	if t.Runtime != nil && t.Runtime.Progress != nil {
+		if info, exists := t.Runtime.Progress.TaskProgress[taskID]; exists {
+			info.TotalSteps = totalSteps
+			t.Runtime.Progress.TaskProgress[taskID] = info
+		}
+	}
+
+	for i, stepCfg := range t.steps {
+		stepName := fmt.Sprintf("Step %d/%d", i+1, totalSteps)
+		t.Logger.Infof("Executing %s", stepName)
+
 		executor := t.newStepExecuter(stepCfg.NewStep, stepCfg.RetryTime)
 		if stepCfg.Parallel && len(stepCfg.Nodes) > 1 {
 			workerPool := common.NewWorkerPool(executor, len(stepCfg.Nodes))
@@ -137,6 +151,13 @@ func (t *BaseTask) ExecuteSteps(ctx context.Context) error {
 				if err != nil {
 					return errors.Trace(err)
 				}
+			}
+		}
+
+		if t.Runtime != nil && t.Runtime.Progress != nil {
+			if info, exists := t.Runtime.Progress.TaskProgress[taskID]; exists {
+				info.CompletedSteps = i + 1
+				t.Runtime.Progress.TaskProgress[taskID] = info
 			}
 		}
 	}

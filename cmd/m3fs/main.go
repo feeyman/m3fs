@@ -40,6 +40,17 @@ var (
 	clusterDeleteAll bool
 )
 
+// getShaPrefix safely gets the prefix of GitSha and handles the case when GitSha is empty or too short
+func getShaPrefix(sha string) string {
+	if len(sha) >= 7 {
+		return sha[:7]
+	}
+	if len(sha) > 0 {
+		return sha
+	}
+	return "unknown"
+}
+
 func main() {
 	app := &cli.App{
 		Name:  "m3fs",
@@ -81,7 +92,7 @@ Build At: %s
 Go Version: %s
 Go OS/Arch: %s/%s`,
 			common.Version,
-			common.GitSha[:7],
+			getShaPrefix(common.GitSha),
 			common.BuildTime,
 			runtime.Version(),
 			runtime.GOOS,

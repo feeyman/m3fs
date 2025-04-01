@@ -154,6 +154,14 @@ type Services struct {
 // UIConfig holds UI related configurations
 type UIConfig struct {
 	TaskInfoColor string `yaml:"taskInfoColor,omitempty"`
+	ShowProgress  bool   `yaml:"showProgress,omitempty"`
+	ProgressStyle string `yaml:"progressStyle,omitempty"` // simple, percentage, bar
+}
+
+// DeploymentConfig holds deployment related configurations
+type DeploymentConfig struct {
+	ResumeEnabled    bool   `yaml:"resumeEnabled,omitempty"`
+	ProgressFilePath string `yaml:"progressFilePath,omitempty"`
 }
 
 // Config is the 3fs cluster config definition
@@ -163,11 +171,12 @@ type Config struct {
 	NetworkType       NetworkType `yaml:"networkType"`
 	LogLevel          string      `yaml:"logLevel"`
 	Nodes             []Node
-	NodeGroups        []NodeGroup    `yaml:"nodeGroups"`
-	Services          Services       `yaml:"services"`
-	Images            Images         `yaml:"images"`
-	UI                UIConfig       `yaml:"ui,omitempty"`
-	CmdMaxExitTimeout *time.Duration `yaml:",omitempty"`
+	NodeGroups        []NodeGroup      `yaml:"nodeGroups"`
+	Services          Services         `yaml:"services"`
+	Images            Images           `yaml:"images"`
+	UI                UIConfig         `yaml:"ui,omitempty"`
+	Deployment        DeploymentConfig `yaml:"deployment,omitempty"`
+	CmdMaxExitTimeout *time.Duration   `yaml:",omitempty"`
 }
 
 func (c *Config) parseValidateNodeGroups(hostSet *utils.Set[string]) (map[string]*NodeGroup, error) {

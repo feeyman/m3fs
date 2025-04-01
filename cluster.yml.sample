@@ -20,6 +20,13 @@ ui:
   # Supported values: "green", "cyan", "yellow", "blue", "magenta", "red", "white"
   # Default value is "green"
   taskInfoColor: "green"
+  # showProgress enables the deployment progress display
+  # Default value is false
+  showProgress: false
+  # progressStyle defines the style of progress display
+  # Supported values: "simple", "percentage", "bar"
+  # Default value is "simple"
+  progressStyle: "simple"
 nodes:
   - name: node1
     # host is the ip of a 3fs node. 
@@ -155,6 +162,15 @@ services:
     # nodeGroups defines the node groups that deploy the clickhouse service
     nodeGroups:
       - group1
+# Deployment related configurations
+deployment:
+  # resumeEnabled enables deployment resume from previous interruption point
+  # Default value is false
+  resumeEnabled: false
+  # progressFilePath defines the path to store deployment progress information
+  # Default value is "${workDir}/deployment_progress.json"
+  progressFilePath: ""
+
 images:
   # registry is the domain of image registry.
   registry: ""

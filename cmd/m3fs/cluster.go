@@ -66,6 +66,27 @@ var clusterCmd = &cli.Command{
 					Usage:       "Image registry (default is empty)",
 					Destination: &registry,
 				},
+				&cli.BoolFlag{
+					Name:    "resume",
+					Aliases: []string{"re"},
+					Usage:   "Resume deployment from the last interruption point",
+				},
+				&cli.StringFlag{
+					Name:    "progress-file",
+					Aliases: []string{"pf"},
+					Usage:   "Path to the progress file for resume deployment",
+				},
+				&cli.BoolFlag{
+					Name:    "show-progress",
+					Aliases: []string{"sp"},
+					Usage:   "Show deployment progress",
+				},
+				&cli.StringFlag{
+					Name:    "progress-style",
+					Aliases: []string{"ps"},
+					Usage:   "Progress display style: simple, percentage, bar (default: simple)",
+					Value:   "simple",
+				},
 			},
 		},
 		{
@@ -92,6 +113,27 @@ var clusterCmd = &cli.Command{
 					Aliases:     []string{"a"},
 					Usage:       "Remove images, packages and scripts",
 					Destination: &clusterDeleteAll,
+				},
+				&cli.BoolFlag{
+					Name:    "resume",
+					Aliases: []string{"re"},
+					Usage:   "Resume destruction from the last interruption point",
+				},
+				&cli.StringFlag{
+					Name:    "progress-file",
+					Aliases: []string{"pf"},
+					Usage:   "Path to the progress file for resume destruction",
+				},
+				&cli.BoolFlag{
+					Name:    "show-progress",
+					Aliases: []string{"sp"},
+					Usage:   "Show destruction progress",
+				},
+				&cli.StringFlag{
+					Name:    "progress-style",
+					Aliases: []string{"ps"},
+					Usage:   "Progress display style: simple, percentage, bar (default: simple)",
+					Value:   "simple",
 				},
 			},
 		},
@@ -142,6 +184,23 @@ func createCluster(ctx *cli.Context) error {
 		return errors.Trace(err)
 	}
 
+	// Configure progress display options
+	if ctx.Bool("show-progress") {
+		cfg.UI.ShowProgress = true
+		if progressStyle := ctx.String("progress-style"); progressStyle != "" {
+			cfg.UI.ProgressStyle = progressStyle
+		}
+	}
+
+	// Configure resume deployment options
+	if ctx.Bool("resume") {
+		cfg.Deployment.ResumeEnabled = true
+		if progressFile := ctx.String("progress-file"); progressFile != "" {
+			cfg.Deployment.ProgressFilePath = progressFile
+		}
+		logrus.Infof("Resuming deployment from previous state")
+	}
+
 	runner, err := task.NewRunner(cfg,
 		new(fdb.CreateFdbClusterTask),
 		new(clickhouse.CreateClickhouseClusterTask),
@@ -169,6 +228,23 @@ func deleteCluster(ctx *cli.Context) error {
 	cfg, err := loadClusterConfig()
 	if err != nil {
 		return errors.Trace(err)
+	}
+
+	// Configure progress display options
+	if ctx.Bool("show-progress") {
+		cfg.UI.ShowProgress = true
+		if progressStyle := ctx.String("progress-style"); progressStyle != "" {
+			cfg.UI.ProgressStyle = progressStyle
+		}
+	}
+
+	// Configure resume destruction options
+	if ctx.Bool("resume") {
+		cfg.Deployment.ResumeEnabled = true
+		if progressFile := ctx.String("progress-file"); progressFile != "" {
+			cfg.Deployment.ProgressFilePath = progressFile
+		}
+		logrus.Infof("Resuming destruction from previous state")
 	}
 
 	runnerTasks := []task.Interface{

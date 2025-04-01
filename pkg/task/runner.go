@@ -17,8 +17,10 @@ package task
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/fatih/color"
 	"github.com/sirupsen/logrus"
@@ -55,6 +57,9 @@ type Runtime struct {
 	WorkDir   string
 	LocalEm   *external.Manager
 	LocalNode *config.Node
+
+	// Fields related to progress tracking
+	Progress *DeploymentProgress
 }
 
 // LoadString load string value form sync map
@@ -89,11 +94,12 @@ func (r *Runtime) LoadInt(key any) (int, bool) {
 
 // Runner is a task runner.
 type Runner struct {
-	Runtime   *Runtime
-	tasks     []Interface
-	cfg       *config.Config
-	localNode *config.Node
-	init      bool
+	Runtime      *Runtime
+	tasks        []Interface
+	cfg          *config.Config
+	localNode    *config.Node
+	init         bool
+	progressFile string // Progress file path
 }
 
 // Init initializes all tasks.
@@ -117,6 +123,9 @@ func (r *Runner) Init() {
 	}
 	em := external.NewManager(external.NewLocalRunner(runnerCfg), logger)
 	r.Runtime.LocalEm = em
+
+	// 初始化进度跟踪
+	r.initProgressTracking()
 
 	for _, task := range r.tasks {
 		task.Init(r.Runtime, log.Logger.Subscribe(log.FieldKeyTask, task.Name()))
@@ -167,27 +176,111 @@ func getColorAttribute(colorName string) color.Attribute {
 	return color.Attribute(-1)
 }
 
+// initProgressTracking initializes progress tracking
+func (r *Runner) initProgressTracking() {
+	if r.cfg.Deployment.ProgressFilePath != "" {
+		r.progressFile = r.cfg.Deployment.ProgressFilePath
+	} else {
+		r.progressFile = filepath.Join(r.cfg.WorkDir, "deployment_progress.json")
+	}
+
+	if r.cfg.Deployment.ResumeEnabled {
+		progress, err := LoadProgressFromFile(r.progressFile)
+		if err != nil {
+			logrus.Warnf("Failed to load progress file: %v, starting fresh deployment", err)
+			r.Runtime.Progress = NewDeploymentProgress()
+		} else {
+			r.Runtime.Progress = progress
+			logrus.Infof("Resuming deployment with %d/%d completed tasks",
+				progress.CompletedTasks, progress.TotalTasks)
+		}
+	} else {
+		r.Runtime.Progress = NewDeploymentProgress()
+	}
+
+	r.Runtime.Progress.TotalTasks = len(r.tasks)
+}
+
+// saveProgress saves current progress to file
+func (r *Runner) saveProgress() error {
+	if !r.cfg.Deployment.ResumeEnabled {
+		return nil
+	}
+
+	return r.Runtime.Progress.SaveProgressToFile(r.progressFile)
+}
+
 // Run runs all tasks.
 func (r *Runner) Run(ctx context.Context) error {
 	useColor := false
 	var highlightColor color.Attribute
+
 	if r.cfg != nil && r.cfg.UI.TaskInfoColor != "" {
 		highlightColor = getColorAttribute(r.cfg.UI.TaskInfoColor)
 		useColor = int(highlightColor) >= 0
 	}
-	for _, task := range r.tasks {
-		var message string
-		if useColor {
-			taskHighlight := color.New(highlightColor, color.Bold).SprintFunc()
-			message = taskHighlight(fmt.Sprintf("Running task %s", task.Name()))
-		} else {
-			message = fmt.Sprintf("Running task %s", task.Name())
+
+	for i, task := range r.tasks {
+		taskID := task.Name()
+
+		if r.cfg.Deployment.ResumeEnabled {
+			if info, exists := r.Runtime.Progress.TaskProgress[taskID]; exists && info.Completed {
+				logrus.Infof("Skipping completed task %s (%d/%d)", task.Name(), i+1, r.Runtime.Progress.TotalTasks)
+				continue
+			}
 		}
-		logrus.Info(message)
+
+		r.Runtime.Progress.CurrentTask = task.Name()
+
+		if r.cfg.UI.ShowProgress {
+			r.Runtime.Progress.DisplayProgress(i, task.Name(), r.cfg.UI.ProgressStyle, highlightColor)
+		} else {
+			var message string
+			if useColor {
+				taskHighlight := color.New(highlightColor, color.Bold).SprintFunc()
+				message = taskHighlight(fmt.Sprintf("Running task %s", task.Name()))
+			} else {
+				message = fmt.Sprintf("Running task %s", task.Name())
+			}
+
+			logrus.Info(message)
+		}
+
+		r.Runtime.Progress.TaskProgress[taskID] = ProgressInfo{
+			TaskID:    taskID,
+			Name:      task.Name(),
+			StartTime: time.Now(),
+		}
+
+		if err := r.saveProgress(); err != nil {
+			logrus.Warnf("Failed to save progress: %v", err)
+		}
+
 		if err := task.Run(ctx); err != nil {
 			return errors.Annotatef(err, "run task %s", task.Name())
 		}
+
+		info := r.Runtime.Progress.TaskProgress[taskID]
+		info.Completed = true
+		info.EndTime = time.Now()
+		r.Runtime.Progress.TaskProgress[taskID] = info
+		r.Runtime.Progress.CompletedTasks++
+
+		if err := r.saveProgress(); err != nil {
+			logrus.Warnf("Failed to save progress: %v", err)
+		}
 	}
+
+	r.Runtime.Progress.EndTime = time.Now()
+
+	if r.cfg.UI.ShowProgress {
+		r.Runtime.Progress.DisplayDeploymentComplete(highlightColor)
+	}
+
+	if err := r.saveProgress(); err != nil {
+		logrus.Warnf("Failed to save final progress: %v", err)
+	}
+
 	return nil
 }
 
