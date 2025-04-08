@@ -12,6 +12,73 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+/*
+Package main implements architecture diagram generation for M3FS clusters.
+
+Architecture Diagram Features:
+- Generates ASCII art diagrams of M3FS cluster architectures with color formatting
+- Visualizes client nodes, network connections, and storage-related services
+- Displays network speed and connectivity information
+- Produces cluster summary statistics
+
+Core Components:
+- ArchDiagram: Main struct for diagram generation
+- NewArchDiagram: Creates and initializes the diagram generator
+- Generate: Produces the complete architecture diagram
+
+Configuration Management:
+- setDefaultConfig: Sets default configuration values when not provided
+- getDefaultServiceConfigs: Creates standard service configurations
+
+Node Processing:
+- getStorageRelatedNodes: Finds and processes all storage-related nodes
+- buildOrderedNodeList: Creates an ordered list of nodes from configuration
+- processNodesInParallel: Handles concurrent node processing with worker pools
+- getServiceNodes: Retrieves nodes for specific service types
+- getClientNodes: Gets client nodes with caching
+- getMetaNodes: Gets meta nodes with caching
+- isNodeInList: Efficiently checks if a node is in a list
+
+Section Rendering:
+- renderClusterHeader: Creates the cluster name header
+- renderClientSection: Renders client nodes section
+- renderNetworkSection: Displays network type and speed
+- renderStorageSection: Shows storage nodes with their services
+- renderSummarySection: Presents statistics summary of the cluster
+
+Network Detection:
+- getNetworkSpeed: Determines network speed from system
+- getIBNetworkSpeed: Detects InfiniBand network speed
+- getEthernetSpeed: Detects Ethernet network speed
+- getDefaultInterface: Finds the default network interface
+
+Memory Management:
+- Object pools for strings.Builder, maps, slices, and processing results
+- getStringBuilder/putStringBuilder: Manages string builder pool
+- getNodeMap/putNodeMap: Manages node map pool
+- getNodeSlice: Manages node slice pool
+- getNodeResult/putNodeResult: Manages nodeResult pool
+
+Cache Management:
+- cacheServiceNodes: Caches service node information
+- getCachedNodes: Retrieves cached node information
+- startCacheCleanup: Initiates background cache cleanup
+- cleanupCaches: Removes expired entries from caches
+
+Error Handling:
+- ConfigError: Represents configuration-related errors
+- NetworkError: Represents network operation errors
+- ServiceError: Represents service-related errors
+
+Utility Functions:
+- renderWithColor: Adds color to text output
+- renderLine: Renders a text line with optional coloring
+- renderDivider: Creates horizontal divider lines
+- renderArrows: Creates arrow connectors between sections
+- expandNodeGroup: Expands node groups into individual nodes
+- getTotalActualNodeCount: Counts unique physical nodes
+*/
+
 package main
 
 import (
